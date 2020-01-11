@@ -1,0 +1,7 @@
+*.out
+*.kra
+*.png~
+.vscode
+game
+client
+server
