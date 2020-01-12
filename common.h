@@ -7,4 +7,4 @@
 #include <netdb.h>
 
 #define PORT 8888
-#define BUF_LEN 255
+#define BUF_LEN 1024
