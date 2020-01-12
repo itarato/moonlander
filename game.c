@@ -23,8 +23,8 @@
 
 #define ZERO_TRESHOLD   0.1
 #define ACCEL           0.2
-#define GRAVITY         0.05
-#define ROTATE_SPEED    4.0
+#define GRAVITY         0.02
+#define ROTATE_SPEED    2.0
 
 #define SOCKET_CODE_ENGINE_BOTTOM_ON  0b00000001
 #define SOCKET_CODE_ENGINE_LEFT_ON    0b00000010
@@ -104,6 +104,9 @@ void update_game_status(struct game_t * const game) {
     } else if (game->moonlander->dir < 0) {
         game->moonlander->dir += 360;
     }
+
+    // Gravity.
+    game->moonlander->vy += GRAVITY;
 
     move(game->moonlander);
 }
