@@ -14,6 +14,8 @@
 #define WIN_WIDTH       800
 #define WIN_HEIGHT      600
 #define MOONLANDER_SIZE 64
+#define DOCK_WIDTH      200
+#define DOCK_HEIGHT     32
 
 #define ENGINE_OFF    0
 #define ENGINE_BOTTOM 0b0001
@@ -58,6 +60,7 @@ struct game_t {
     struct static_asset_t * const engine_bottom;
     struct static_asset_t * const engine_left;
     struct static_asset_t * const engine_right;
+    SDL_Rect dock;
 };
 
 void free_game(struct game_t * game) {
@@ -148,6 +151,9 @@ void draw(SDL_Renderer * const renderer, SDL_Window * const win, struct game_t *
         game->engine_right->frame.y = game->moonlander->y;
         SDL_RenderCopyEx(renderer, game->engine_right->tex, NULL, &game->engine_right->frame, game->moonlander->dir, &center, SDL_FLIP_NONE);
     }
+
+    SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
+    SDL_RenderFillRect(renderer, &game->dock);
 }
 
 SDL_Texture * load_png(SDL_Renderer *renderer, char *path) {
@@ -261,7 +267,8 @@ int main(int argc, char* argv[]) {
         .engine_top     = &engine_top,
         .engine_bottom  = &engine_bottom,
         .engine_left    = &engine_left,
-        .engine_right   = &engine_right };
+        .engine_right   = &engine_right,
+        .dock           = { (WIN_WIDTH - DOCK_WIDTH) >> 1, WIN_HEIGHT - (DOCK_HEIGHT << 1), DOCK_WIDTH, DOCK_HEIGHT } };
 
     pthread_t socket_thread;
     if (pthread_create(&socket_thread, NULL, socket_comms, NULL) != 0) {
