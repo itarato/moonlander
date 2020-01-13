@@ -16,6 +16,7 @@
 #define MOONLANDER_SIZE 64
 #define DOCK_WIDTH      200
 #define DOCK_HEIGHT     32
+#define SCREEN_RATE_DELAY 10
 
 #define ENGINE_OFF    0
 #define ENGINE_BOTTOM 0b0001
@@ -81,9 +82,7 @@ void move(struct obj2d_t * const obj2d) {
     if (obj2d->y >= WIN_HEIGHT) obj2d->y -= WIN_HEIGHT;
 }
 
-double deg2rad(double dir) {
-    return (dir / 180) * M_PI;
-}
+static inline double deg2rad(double dir) { return (dir / 180) * M_PI; }
 
 void update_game_status(struct game_t * const game) {
     double vx = 0.0;
@@ -218,17 +217,17 @@ void restart_game(struct game_t * const game) {
     game->engine = ENGINE_OFF;
 }
 
-void panic_with_sdl_image(char *msg) {
+static inline void panic_with_sdl_image(char *msg) {
     printf("%s: %s\n", msg, IMG_GetError());
     exit(EXIT_FAILURE);
 }
 
-void panic_with_sdl(char *msg) {
+static inline void panic_with_sdl(char *msg) {
     printf("%s: %s\n", msg, SDL_GetError());
     exit(EXIT_FAILURE);
 }
 
-void panic_with_errno(char *msg) {
+static inline void panic_with_errno(char *msg) {
     perror(msg);
     exit(EXIT_FAILURE);
 }
@@ -267,6 +266,8 @@ int main(int argc, char* argv[]) {
     if (pthread_create(&server_thread, NULL, server_thread_entry, NULL) != 0) panic_with_errno("Cannot create thread");
 
     bool quit = false;
+    SDL_Event e;
+    
     while (!quit) {
         update_game_status(&game);
         draw(renderer, win, &game);
@@ -274,22 +275,19 @@ int main(int argc, char* argv[]) {
         game.engine = ENGINE_OFF;
 
         SDL_RenderPresent(renderer);
-        SDL_Delay(10);
+        SDL_Delay(SCREEN_RATE_DELAY);
 
-        SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) quit = true;
         }
 
         const uint8_t *key_state = SDL_GetKeyboardState(NULL);
-        if (key_state[SDL_SCANCODE_ESCAPE]) {
-            quit = true;
-        }
-
         if (key_state[SDL_SCANCODE_DOWN]  || socket_engine_status & ENGINE_BOTTOM)  interact_game_engine(&game, ENGINE_BOTTOM);
         if (key_state[SDL_SCANCODE_UP]    || socket_engine_status & ENGINE_TOP)     interact_game_engine(&game, ENGINE_TOP);
         if (key_state[SDL_SCANCODE_LEFT]  || socket_engine_status & ENGINE_LEFT)    interact_game_engine(&game, ENGINE_LEFT);
         if (key_state[SDL_SCANCODE_RIGHT] || socket_engine_status & ENGINE_RIGHT)   interact_game_engine(&game, ENGINE_RIGHT);
+        if (key_state[SDL_SCANCODE_ESCAPE]) quit = true;
+        if (key_state[SDL_SCANCODE_N]) restart_game(&game);
     }
 
     free_game(&game);
