@@ -128,28 +128,14 @@ void draw(SDL_Renderer * const renderer, SDL_Window * const win, struct game_t *
 
     SDL_RenderCopyEx(renderer, game->rocket->tex, NULL, &game->rocket->frame, game->moonlander->dir, &center, SDL_FLIP_NONE);
 
-    if (game->engine & ENGINE_BOTTOM) {
-        game->engine_bottom->frame.x = game->moonlander->x;
-        game->engine_bottom->frame.y = game->moonlander->y;
-        SDL_RenderCopyEx(renderer, game->engine_bottom->tex, NULL, &game->engine_bottom->frame, game->moonlander->dir, &center, SDL_FLIP_NONE);
-    }
-
-    if (game->engine & ENGINE_TOP) {
-        game->engine_top->frame.x = game->moonlander->x;
-        game->engine_top->frame.y = game->moonlander->y;
-        SDL_RenderCopyEx(renderer, game->engine_top->tex, NULL, &game->engine_top->frame, game->moonlander->dir, &center, SDL_FLIP_NONE);
-    }
-
-    if (game->engine & ENGINE_LEFT) {
-        game->engine_left->frame.x = game->moonlander->x;
-        game->engine_left->frame.y = game->moonlander->y;
-        SDL_RenderCopyEx(renderer, game->engine_left->tex, NULL, &game->engine_left->frame, game->moonlander->dir, &center, SDL_FLIP_NONE);
-    }
-
-    if (game->engine & ENGINE_RIGHT) {
-        game->engine_right->frame.x = game->moonlander->x;
-        game->engine_right->frame.y = game->moonlander->y;
-        SDL_RenderCopyEx(renderer, game->engine_right->tex, NULL, &game->engine_right->frame, game->moonlander->dir, &center, SDL_FLIP_NONE);
+    uint8_t engine_dirs[4] = { ENGINE_BOTTOM, ENGINE_TOP, ENGINE_LEFT, ENGINE_RIGHT};
+    struct static_asset_t * const engines[4] = { game->engine_bottom, game->engine_top, game->engine_left, game->engine_right };
+    for (int i = 0; i < 4; i++) {
+        if (game->engine & engine_dirs[i]) {
+            engines[i]->frame.x = game->moonlander->x;
+            engines[i]->frame.y = game->moonlander->y;
+            SDL_RenderCopyEx(renderer, engines[i]->tex, NULL, &engines[i]->frame, game->moonlander->dir, &center, SDL_FLIP_NONE);
+        }
     }
 
     SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
@@ -169,7 +155,7 @@ SDL_Texture * load_png(SDL_Renderer *renderer, char *path) {
     return texture;
 }
 
-static void *socket_comms() {
+static void *server_thread_entry() {
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd == -1) {
         perror("Cannot establish socket");
@@ -207,8 +193,8 @@ static void *socket_comms() {
         read(cli_sock_fd, buf, BUF_LEN);
 
         uint8_t cmd_bit = (uint8_t)buf[0];
-        printf("IN: <%d>\n", cmd_bit);
 
+        // @TODO It could send 2 bytes: [on/off, engine].
         switch (cmd_bit) {
         case SOCKET_CODE_ENGINE_BOTTOM_ON:
             socket_engine_status |= ENGINE_BOTTOM;
@@ -222,59 +208,63 @@ static void *socket_comms() {
     }
 }
 
+void restart_game(struct game_t * const game) {
+    game->moonlander->x = (WIN_WIDTH - MOONLANDER_SIZE) >> 1;
+    game->moonlander->y = (WIN_HEIGHT - MOONLANDER_SIZE) >> 1;
+    game->moonlander->vx = 0.0;
+    game->moonlander->vy = 0.0;
+    game->moonlander->dir = 0.0;
+
+    game->engine = ENGINE_OFF;
+}
+
+void panic_with_sdl_image(char *msg) {
+    printf("%s: %s\n", msg, IMG_GetError());
+    exit(EXIT_FAILURE);
+}
+
+void panic_with_sdl(char *msg) {
+    printf("%s: %s\n", msg, SDL_GetError());
+    exit(EXIT_FAILURE);
+}
+
+void panic_with_errno(char *msg) {
+    perror(msg);
+    exit(EXIT_FAILURE);
+}
+
 int main(int argc, char* argv[]) {
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-        printf("SDL Init Error\n");
-        exit(EXIT_FAILURE);
-    }
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) panic_with_sdl("SDL Init Error\n");
 
     SDL_Window *win = SDL_CreateWindow("Moon Lander", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIN_WIDTH, WIN_HEIGHT, SDL_WINDOW_SHOWN);
-    if (win == NULL) {
-        printf("Window creation error\n");
-        exit(EXIT_FAILURE);
-    }
+    if (win == NULL) panic_with_sdl("Window creation error\n");
 
     int img_flags = IMG_INIT_PNG;
-    if (!(IMG_Init(img_flags) & img_flags)) {
-        printf("SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError());
-        exit(EXIT_FAILURE);
-    }
+    if (!(IMG_Init(img_flags) & img_flags)) panic_with_sdl_image("SDL_image could not initialize");
 
     SDL_Renderer *renderer = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    if (renderer == NULL) {
-        printf("Renderer creation error\n");
-        exit(EXIT_FAILURE);
-    }
+    if (renderer == NULL) panic_with_sdl("Renderer creation error\n");
 
     SDL_Rect rocket_frame = { 100, 100, 80, 100 };
-    struct static_asset_t rocket = { .tex = load_png(renderer, "./rocket.png"), .frame = rocket_frame };
-    struct static_asset_t engine_top = { .tex = load_png(renderer, "./engine_top.png"), .frame = rocket_frame };
+    struct static_asset_t rocket        = { .tex = load_png(renderer, "./rocket.png"), .frame = rocket_frame };
+    struct static_asset_t engine_top    = { .tex = load_png(renderer, "./engine_top.png"), .frame = rocket_frame };
     struct static_asset_t engine_bottom = { .tex = load_png(renderer, "./engine_bottom.png"), .frame = rocket_frame };
-    struct static_asset_t engine_left = { .tex = load_png(renderer, "./engine_left.png"), .frame = rocket_frame };
-    struct static_asset_t engine_right = { .tex = load_png(renderer, "./engine_right.png"), .frame = rocket_frame };
+    struct static_asset_t engine_left   = { .tex = load_png(renderer, "./engine_left.png"), .frame = rocket_frame };
+    struct static_asset_t engine_right  = { .tex = load_png(renderer, "./engine_right.png"), .frame = rocket_frame };
 
-    struct obj2d_t moonlander = {
-        .x = (WIN_WIDTH - MOONLANDER_SIZE) >> 1,
-        .y = (WIN_HEIGHT - MOONLANDER_SIZE) >> 1,
-        .vx = 0.0,
-        .vy = 0.0,
-        .dir = 0.0 };
-
+    struct obj2d_t moonlander;
     struct game_t game = {
         .moonlander     = &moonlander,
-        .engine         = ENGINE_OFF,
         .rocket         = &rocket,
         .engine_top     = &engine_top,
         .engine_bottom  = &engine_bottom,
         .engine_left    = &engine_left,
         .engine_right   = &engine_right,
         .dock           = { (WIN_WIDTH - DOCK_WIDTH) >> 1, WIN_HEIGHT - (DOCK_HEIGHT << 1), DOCK_WIDTH, DOCK_HEIGHT } };
+    restart_game(&game);
 
-    pthread_t socket_thread;
-    if (pthread_create(&socket_thread, NULL, socket_comms, NULL) != 0) {
-        perror("Cannot create thread");
-        exit(EXIT_FAILURE);
-    };
+    pthread_t server_thread;
+    if (pthread_create(&server_thread, NULL, server_thread_entry, NULL) != 0) panic_with_errno("Cannot create thread");
 
     bool quit = false;
     while (!quit) {
@@ -296,25 +286,14 @@ int main(int argc, char* argv[]) {
             quit = true;
         }
 
-        if (key_state[SDL_SCANCODE_DOWN] || socket_engine_status & ENGINE_BOTTOM) {
-            interact_game_engine(&game, ENGINE_BOTTOM);
-        }
-
-        if (key_state[SDL_SCANCODE_UP]) {
-            interact_game_engine(&game, ENGINE_TOP);
-        }
-
-        if (key_state[SDL_SCANCODE_LEFT]) {
-            interact_game_engine(&game, ENGINE_LEFT);
-        }
-
-        if (key_state[SDL_SCANCODE_RIGHT]) {
-            interact_game_engine(&game, ENGINE_RIGHT);
-        }
+        if (key_state[SDL_SCANCODE_DOWN]  || socket_engine_status & ENGINE_BOTTOM)  interact_game_engine(&game, ENGINE_BOTTOM);
+        if (key_state[SDL_SCANCODE_UP]    || socket_engine_status & ENGINE_TOP)     interact_game_engine(&game, ENGINE_TOP);
+        if (key_state[SDL_SCANCODE_LEFT]  || socket_engine_status & ENGINE_LEFT)    interact_game_engine(&game, ENGINE_LEFT);
+        if (key_state[SDL_SCANCODE_RIGHT] || socket_engine_status & ENGINE_RIGHT)   interact_game_engine(&game, ENGINE_RIGHT);
     }
 
     free_game(&game);
-    pthread_cancel(socket_thread);
+    pthread_cancel(server_thread);
 
     SDL_Quit();
 }
