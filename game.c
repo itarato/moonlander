@@ -201,6 +201,24 @@ static void *server_thread_entry() {
         case SOCKET_CODE_ENGINE_BOTTOM_OFF:
             socket_engine_status &= ~ENGINE_BOTTOM;
             break;
+        case SOCKET_CODE_ENGINE_LEFT_ON:
+            socket_engine_status |= ENGINE_LEFT;
+            break;
+        case SOCKET_CODE_ENGINE_LEFT_OFF:
+            socket_engine_status &= ~ENGINE_LEFT;
+            break;
+        case SOCKET_CODE_ENGINE_RIGHT_ON:
+            socket_engine_status |= ENGINE_RIGHT;
+            break;
+        case SOCKET_CODE_ENGINE_RIGHT_OFF:
+            socket_engine_status &= ~ENGINE_RIGHT;
+            break;
+        case SOCKET_CODE_ENGINE_TOP_ON:
+            socket_engine_status |= ENGINE_TOP;
+            break;
+        case SOCKET_CODE_ENGINE_TOP_OFF:
+            socket_engine_status &= ~ENGINE_TOP;
+            break;
         default:
             break;
         }
@@ -267,7 +285,7 @@ int main(int argc, char* argv[]) {
 
     bool quit = false;
     SDL_Event e;
-    
+
     while (!quit) {
         update_game_status(&game);
         draw(renderer, win, &game);

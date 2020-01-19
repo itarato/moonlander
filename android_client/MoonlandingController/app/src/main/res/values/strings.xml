@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">MoonlandingController</string>
     <string name="engage">Engage!</string>
+    <string name="server_ip_address">Server IP address</string>
 </resources>
